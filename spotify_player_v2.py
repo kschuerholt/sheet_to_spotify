@@ -7,6 +7,10 @@ if TYPE_CHECKING:
     from flask import Flask
 
 
+# Mapping from contributor name to avatar/thumbnail path used in the web UI.
+CONTRIBUTOR_IMAGES: Dict[str, str] = {}
+
+
 
 
 def normalize_uri(raw: str) -> str:
@@ -120,11 +124,39 @@ def load_csv_mapping(
     return mapping, ordered
 
 
-def init_spotify() -> "spotipy.Spotify":
+def load_spotify_creds(path: str) -> Tuple[str, str, str]:
+    """Return ``(client_id, client_secret, redirect_uri)`` from JSON file."""
+    import json
+
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    try:
+        return data["client_id"], data["client_secret"], data["redirect_uri"]
+    except KeyError as exc:
+        raise KeyError(f"Missing key in {path}: {exc}") from exc
+
+
+def init_spotify(creds_json: str | None = None) -> "spotipy.Spotify":
+    """Initialise Spotipy using env vars or a credentials JSON file."""
     import spotipy
     from spotipy.oauth2 import SpotifyOAuth
 
+    cid = os.getenv("SPOTIFY_CLIENT_ID")
+    secret = os.getenv("SPOTIFY_CLIENT_SECRET")
+    redirect = os.getenv("SPOTIFY_REDIRECT_URI")
+
+    if not (cid and secret and redirect):
+        creds_json = creds_json or os.getenv("SPOTIFY_CREDS_JSON") or "spotify_creds.json"
+        if os.path.exists(creds_json):
+            cid, secret, redirect = load_spotify_creds(creds_json)
+
+    if not (cid and secret and redirect):
+        raise SystemExit("Spotify credentials missing: set env vars or SPOTIFY_CREDS_JSON")
+
     auth = SpotifyOAuth(
+        client_id=cid,
+        client_secret=secret,
+        redirect_uri=redirect,
         scope="playlist-modify-public playlist-modify-private user-read-playback-state",
         open_browser=False,
     )
@@ -169,6 +201,8 @@ template = """<!doctype html>
   <title>Now Playing</title>
   <style>
     html { font-family: system-ui, sans-serif; background:#111; color:#fefefe; text-align:center; }
+    img.cover { width:45vw; margin-top:4vh; box-shadow:0 0 15px #000; }
+    img.contrib { width:10vw; height:10vw; border-radius:50%; object-fit:cover; margin-top:2vh; }
     .track { font-size:4vw; margin:2vh 0; }
     .artist { font-size:3vw; opacity:0.8; }
     .contrib { font-size:2.5vw; margin-top:4vh; color:#0fa9e6; }
@@ -176,9 +210,13 @@ template = """<!doctype html>
 </head>
 <body>
   {% if track_name %}
+    {% if cover_url %}<img class=\"cover\" src=\"{{ cover_url }}\" alt=\"cover\" />{% endif %}
     <div class=\"track\">{{ track_name }}</div>
     <div class=\"artist\">{{ artists }}</div>
-    <div class=\"contrib\">added by {{ contributor }}</div>
+    <div class=\"contrib\">
+      {% if contrib_img %}<img class=\"contrib\" src=\"{{ contrib_img }}\" alt=\"{{ contributor }}\" />{% endif %}
+      added by {{ contributor }}
+    </div>
   {% else %}
     <p>Nothing playing right now …</p>
   {% endif %}
@@ -186,9 +224,14 @@ template = """<!doctype html>
 </html>"""
 
 
-def create_app(sp, mapping: Dict[str, str]) -> "Flask":
+def create_app(
+    sp,
+    mapping: Dict[str, str],
+    contributor_image_mapping: Dict[str, str] | None = None,
+) -> "Flask":
     from flask import Flask, render_template_string
     app = Flask(__name__)
+    contrib_imgs = contributor_image_mapping or {}
 
     @app.route("/")
     def show_now_playing():
@@ -197,26 +240,30 @@ def create_app(sp, mapping: Dict[str, str]) -> "Flask":
             item = current["item"]
             uri = item["uri"]
             contributor = mapping.get(uri, "someone")
+            images = item.get("album", {}).get("images") or []
+            cover = images[0]["url"] if images else None
             return render_template_string(
                 template,
                 track_name=item["name"],
                 artists=", ".join(a["name"] for a in item["artists"]),
                 contributor=contributor,
+                cover_url=cover,
+                contrib_img=contrib_imgs.get(contributor),
             )
         return render_template_string(
-            template, track_name=None, artists=None, contributor=None
+            template,
+            track_name=None,
+            artists=None,
+            contributor=None,
+            cover_url=None,
+            contrib_img=None,
         )
 
     return app
 
 
 def main() -> None:
-    required = [
-        "SPOTIFY_CLIENT_ID",
-        "SPOTIFY_CLIENT_SECRET",
-        "SPOTIFY_REDIRECT_URI",
-        "SPOTIFY_PLAYLIST_ID",
-    ]
+    required = ["SPOTIFY_PLAYLIST_ID"]
     missing = [k for k in required if not os.getenv(k)]
     if missing:
         raise SystemExit(f"Missing env vars: {', '.join(missing)}")
@@ -241,9 +288,9 @@ def main() -> None:
             service_json=service_json,
             api_key=api_key,
         )
-    sp = init_spotify()
+    sp = init_spotify(os.getenv("SPOTIFY_CREDS_JSON"))
     sync_playlist_once(sp, os.environ["SPOTIFY_PLAYLIST_ID"], ordered)
-    app = create_app(sp, mapping)
+    app = create_app(sp, mapping, CONTRIBUTOR_IMAGES)
     app.run(host="0.0.0.0", port=5000, debug=False)
 
 

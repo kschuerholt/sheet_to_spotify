@@ -4,6 +4,8 @@ from spotify_player_v2 import (
     parse_sheet_rows,
     sync_playlist_once,
     load_csv_mapping,
+    create_app,
+    load_spotify_creds,
 )
 
 
@@ -89,3 +91,32 @@ def test_load_csv_mapping(tmp_path):
         "spotify:track:222",
         "spotify:track:333",
     ]
+
+
+def test_create_app_renders_images():
+    class DummySpotify:
+        def current_playback(self, additional_types=None):
+            return {
+                "is_playing": True,
+                "item": {
+                    "uri": "spotify:track:111",
+                    "name": "Song",
+                    "artists": [{"name": "Art"}],
+                    "album": {"images": [{"url": "http://cover"}]},
+                },
+            }
+
+    mapping = {"spotify:track:111": "Alice"}
+    contrib = {"Alice": "/imgs/a.png"}
+    app = create_app(DummySpotify(), mapping, contrib)
+    with app.test_client() as c:
+        data = c.get("/").get_data(as_text=True)
+        assert "http://cover" in data
+        assert "/imgs/a.png" in data
+
+
+def test_load_spotify_creds(tmp_path):
+    p = tmp_path / "creds.json"
+    p.write_text('{"client_id":"id","client_secret":"sec","redirect_uri":"uri"}')
+    cid, sec, uri = load_spotify_creds(str(p))
+    assert (cid, sec, uri) == ("id", "sec", "uri")
