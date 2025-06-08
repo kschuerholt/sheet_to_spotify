@@ -200,22 +200,48 @@ template = """<!doctype html>
   <meta http-equiv=\"refresh\" content=\"10\">
   <title>Now Playing</title>
   <style>
-    html { font-family: system-ui, sans-serif; background:#111; color:#fefefe; text-align:center; }
-    img.cover { width:45vw; margin-top:4vh; box-shadow:0 0 15px #000; }
-    img.contrib { width:10vw; height:10vw; border-radius:50%; object-fit:cover; margin-top:2vh; }
-    .track { font-size:4vw; margin:2vh 0; }
-    .artist { font-size:3vw; opacity:0.8; }
-    .contrib { font-size:2.5vw; margin-top:4vh; color:#0fa9e6; }
+    html {
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #fefefe;
+    }
+    .wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 4vw;
+      margin-top: 4vh;
+      text-align: center;
+    }
+    .song,
+    .contrib-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    img.cover,
+    img.contrib-img {
+      max-width: 28vmin;
+      max-height: 28vmin;
+    }
+    img.cover { box-shadow: 0 0 15px #000; }
+    .track { font-size: 3vw; margin-top: 2vh; }
+    .artist { font-size: 2.5vw; opacity: 0.8; }
+    .contrib-name { font-size: 2.5vw; color: #0fa9e6; margin-top: 1vh; }
   </style>
 </head>
 <body>
   {% if track_name %}
-    {% if cover_url %}<img class=\"cover\" src=\"{{ cover_url }}\" alt=\"cover\" />{% endif %}
-    <div class=\"track\">{{ track_name }}</div>
-    <div class=\"artist\">{{ artists }}</div>
-    <div class=\"contrib\">
-      {% if contrib_img %}<img class=\"contrib\" src=\"{{ contrib_img }}\" alt=\"{{ contributor }}\" />{% endif %}
-      added by {{ contributor }}
+    <div class="wrap">
+      <div class="song">
+        {% if cover_url %}<img class="cover" src="{{ cover_url }}" alt="cover" />{% endif %}
+        <div class="track">{{ track_name }}</div>
+        <div class="artist">{{ artists }}</div>
+      </div>
+      <div class="contrib-box">
+        {% if contrib_img %}<img class="contrib-img" src="{{ contrib_img }}" alt="{{ contributor }}" />{% endif %}
+        <div class="contrib-name">added by {{ contributor }}</div>
+      </div>
     </div>
   {% else %}
     <p>Nothing playing right now …</p>
