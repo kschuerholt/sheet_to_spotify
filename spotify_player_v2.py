@@ -228,10 +228,18 @@ def create_app(
     sp,
     mapping: Dict[str, str],
     contributor_image_mapping: Dict[str, str] | None = None,
+    image_dir: str | None = None,
 ) -> "Flask":
-    from flask import Flask, render_template_string
+    from flask import Flask, render_template_string, send_from_directory
     app = Flask(__name__)
     contrib_imgs = contributor_image_mapping or {}
+
+    if image_dir:
+        img_dir = os.path.abspath(image_dir)
+
+        @app.route("/contributor_images/<path:filename>")
+        def _contrib_image(filename: str):
+            return send_from_directory(img_dir, filename)
 
     @app.route("/")
     def show_now_playing():
@@ -290,7 +298,7 @@ def main() -> None:
         )
     sp = init_spotify(os.getenv("SPOTIFY_CREDS_JSON"))
     sync_playlist_once(sp, os.environ["SPOTIFY_PLAYLIST_ID"], ordered)
-    app = create_app(sp, mapping, CONTRIBUTOR_IMAGES)
+    app = create_app(sp, mapping, CONTRIBUTOR_IMAGES, "contributor_images")
     app.run(host="0.0.0.0", port=5000, debug=False)
 
 
