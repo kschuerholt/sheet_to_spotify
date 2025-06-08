@@ -197,7 +197,7 @@ template = """<!doctype html>
 <html>
 <head>
   <meta charset=\"utf-8\" />
-  <meta http-equiv=\"refresh\" content=\"10\">
+  <!-- periodic change detection handled via JavaScript -->
   <title>Now Playing</title>
   <style>
     html {
@@ -213,39 +213,54 @@ template = """<!doctype html>
       margin-top: 4vh;
       text-align: center;
     }
-    .song,
-    .contrib-box {
+    .info {
       display: flex;
       flex-direction: column;
+      justify-content: center;
       align-items: center;
     }
     img.cover,
     img.contrib-img {
-      max-width: 28vmin;
-      max-height: 28vmin;
+      width: 28vmin;
+      height: 28vmin;
+      object-fit: cover;
     }
     img.cover { box-shadow: 0 0 15px #000; }
     .track { font-size: 3vw; margin-top: 2vh; }
     .artist { font-size: 2.5vw; opacity: 0.8; }
-    .contrib-name { font-size: 2.5vw; color: #0fa9e6; margin-top: 1vh; }
+    .contrib-name { font-size: 2.5vw; color: #0fa9e6; margin-top: 2vh; }
   </style>
 </head>
 <body>
   {% if track_name %}
     <div class="wrap">
-      <div class="song">
-        {% if cover_url %}<img class="cover" src="{{ cover_url }}" alt="cover" />{% endif %}
+      {% if cover_url %}<img class="cover" src="{{ cover_url }}" alt="cover" />{% endif %}
+      <div class="info">
         <div class="track">{{ track_name }}</div>
         <div class="artist">{{ artists }}</div>
-      </div>
-      <div class="contrib-box">
-        {% if contrib_img %}<img class="contrib-img" src="{{ contrib_img }}" alt="{{ contributor }}" />{% endif %}
         <div class="contrib-name">added by {{ contributor }}</div>
       </div>
+      {% if contrib_img %}<img class="contrib-img" src="{{ contrib_img }}" alt="{{ contributor }}" />{% endif %}
     </div>
   {% else %}
     <p>Nothing playing right now …</p>
   {% endif %}
+  <script>
+    const pollInterval = 5000;
+    let current = "{{ uri or '' }}";
+    async function check() {
+      try {
+        const r = await fetch('/status');
+        const data = await r.json();
+        if (data.uri !== current) {
+          window.location.reload();
+        }
+      } catch (e) {
+        console.error('poll failed', e);
+      }
+    }
+    setInterval(check, pollInterval);
+  </script>
 </body>
 </html>"""
 
@@ -267,6 +282,14 @@ def create_app(
         def _contrib_image(filename: str):
             return send_from_directory(img_dir, filename)
 
+    @app.route("/status")
+    def _status():
+        current = sp.current_playback(additional_types=["track"]) if sp else None
+        uri = None
+        if current and current.get("is_playing") and current.get("item"):
+            uri = current["item"].get("uri")
+        return {"uri": uri}
+
     @app.route("/")
     def show_now_playing():
         current = sp.current_playback(additional_types=["track"]) if sp else None
@@ -283,6 +306,7 @@ def create_app(
                 contributor=contributor,
                 cover_url=cover,
                 contrib_img=contrib_imgs.get(contributor),
+                uri=uri,
             )
         return render_template_string(
             template,
@@ -291,6 +315,7 @@ def create_app(
             contributor=None,
             cover_url=None,
             contrib_img=None,
+            uri=None,
         )
 
     return app
