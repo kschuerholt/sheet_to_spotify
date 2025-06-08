@@ -205,12 +205,21 @@ template = """<!doctype html>
       background: #111;
       color: #fefefe;
     }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
     .wrap {
       display: flex;
       justify-content: center;
       align-items: center;
       gap: 4vw;
-      margin-top: 4vh;
+      transform-origin: center;
+      transition: transform 0.2s;
       text-align: center;
     }
     .info {
@@ -221,8 +230,8 @@ template = """<!doctype html>
     }
     img.cover,
     img.contrib-img {
-      width: 28vmin;
-      height: 28vmin;
+      width: 31vmin;
+      height: 31vmin;
       object-fit: cover;
     }
     img.cover { box-shadow: 0 0 15px #000; }
@@ -260,6 +269,13 @@ template = """<!doctype html>
       }
     }
     setInterval(check, pollInterval);
+    let scale = 1;
+    applyZoom();
+    function applyZoom() { document.querySelector(".wrap").style.transform = `scale(${scale})`; }
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "+" || e.key === "=") { scale = Math.min(scale + 0.1, 3); applyZoom(); }
+      if (e.key === "-" || e.key === "_") { scale = Math.max(scale - 0.1, 0.5); applyZoom(); }
+    });
   </script>
 </body>
 </html>"""
