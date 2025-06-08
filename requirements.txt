@@ -1,0 +1,4 @@
+flask~=3.0.2
+spotipy~=2.23.0
+gspread~=6.1.0
+google-auth~=2.29.0
